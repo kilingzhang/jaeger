@@ -19,7 +19,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/ClickHouse/clickhouse-go"
 	"go.uber.org/zap"
@@ -382,7 +381,7 @@ func (m *Store) GetOperations(
 	var retMe []spanstore.Operation
 	now := time.Now()
 	SQL := fmt.Sprintf(
-		"select distinct operation_name from jaeger_spans_all where date between '%s' and '%s' and service_name = '%s'",
+		"select distinct operation_name from jaeger_spans_all where date between '%s' and '%s' and service_name = '%s' order by start_time desc",
 		now.Add(-7*60*60*24*time.Second).In(m.TimeZone).Format(m.YYMMDDFormat),
 		now.In(m.TimeZone).Format(m.YYMMDDFormat),
 		query.ServiceName,
@@ -419,15 +418,10 @@ func (m *Store) GetOperations(
 	return retMe, nil
 }
 
-// FindTraces returns all traces in the query parameters are satisfied by a trace's span
-func (m *Store) FindTraces(ctx context.Context, query *spanstore.TraceQueryParameters) ([]*model.Trace, error) {
-	var retMe []*model.Trace
-
+func (m *Store) FormatQuerySQL(query *spanstore.TraceQueryParameters) string {
 	operationNameWhere := ""
 	tagsWhere := ""
 	durationWhere := ""
-
-	fmt.Println(query.Tags)
 
 	for k, v := range query.Tags {
 		tagsWhere += fmt.Sprintf(
@@ -451,8 +445,8 @@ func (m *Store) FindTraces(ctx context.Context, query *spanstore.TraceQueryParam
 		)
 	}
 
-	SQL := fmt.Sprintf(
-		"select distinct trace_id from jaeger_spans_all where date between '%s' and '%s' and service_name = '%s' %s and start_time between %d and %d %s %s order by start_time limit %d",
+	return fmt.Sprintf(
+		"select distinct trace_id from jaeger_spans_all where date between '%s' and '%s' and service_name = '%s' %s and start_time between %d and %d %s %s order by start_time desc limit %d",
 		query.StartTimeMin.In(m.TimeZone).Format(m.YYMMDDFormat),
 		query.StartTimeMax.In(m.TimeZone).Format(m.YYMMDDFormat),
 		query.ServiceName,
@@ -463,11 +457,19 @@ func (m *Store) FindTraces(ctx context.Context, query *spanstore.TraceQueryParam
 		tagsWhere,
 		query.NumTraces,
 	)
-	rows, err := m.conn.Query(
-		SQL,
-	)
+}
 
-	fmt.Println(SQL)
+// FindTraces returns all traces in the query parameters are satisfied by a trace's span
+func (m *Store) FindTraces(ctx context.Context, query *spanstore.TraceQueryParameters) ([]*model.Trace, error) {
+	var retMe []*model.Trace
+
+	querySQL := m.FormatQuerySQL(query)
+
+	m.logger.Info(querySQL)
+
+	rows, err := m.conn.Query(
+		querySQL,
+	)
 
 	if err != nil {
 		m.logger.Error(err.Error())
@@ -501,7 +503,39 @@ func (m *Store) FindTraces(ctx context.Context, query *spanstore.TraceQueryParam
 
 // FindTraceIDs is not implemented.
 func (m *Store) FindTraceIDs(ctx context.Context, query *spanstore.TraceQueryParameters) ([]model.TraceID, error) {
-	return nil, errors.New("not implemented")
+
+	querySQL := m.FormatQuerySQL(query)
+
+	m.logger.Info(querySQL)
+
+	rows, err := m.conn.Query(
+		querySQL,
+	)
+
+	if err != nil {
+		m.logger.Error(err.Error())
+		return nil, spanstore.ErrTraceNotFound
+	}
+
+	defer rows.Close()
+
+	var traceIds []model.TraceID
+	for rows.Next() {
+		var traceId string
+		if err := rows.Scan(&traceId); err != nil {
+			m.logger.Error(err.Error())
+			continue
+		}
+		traceID, _ := model.TraceIDFromString(traceId)
+		traceIds = append(traceIds, traceID)
+	}
+
+	if err := rows.Err(); err != nil {
+		m.logger.Error(err.Error())
+		return nil, spanstore.ErrTraceNotFound
+	}
+
+	return traceIds, nil
 }
 
 func (m *Store) validTrace(trace *model.Trace, query *spanstore.TraceQueryParameters) bool {
