@@ -18,6 +18,7 @@ package storage
 import (
 	"flag"
 	"fmt"
+	"github.com/jaegertracing/jaeger/plugin/storage/clickhouse"
 	"io"
 
 	"github.com/spf13/viper"
@@ -38,6 +39,7 @@ import (
 )
 
 const (
+	clickhouseStorageType    = "clickhouse"
 	cassandraStorageType     = "cassandra"
 	elasticsearchStorageType = "elasticsearch"
 	memoryStorageType        = "memory"
@@ -88,6 +90,8 @@ func NewFactory(config FactoryConfig) (*Factory, error) {
 
 func (f *Factory) getFactoryOfType(factoryType string) (storage.Factory, error) {
 	switch factoryType {
+	case clickhouseStorageType:
+		return clickhouse.NewFactory(), nil
 	case cassandraStorageType:
 		return cassandra.NewFactory(), nil
 	case elasticsearchStorageType:

@@ -3,6 +3,7 @@ module github.com/jaegertracing/jaeger
 go 1.16
 
 require (
+	github.com/ClickHouse/clickhouse-go v1.4.5 // indirect
 	github.com/Shopify/sarama v1.29.1
 	github.com/apache/thrift v0.14.2
 	github.com/bsm/sarama-cluster v2.1.13+incompatible
@@ -21,6 +22,7 @@ require (
 	github.com/gogo/googleapis v1.4.1
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/protobuf v1.5.2
+	github.com/google/flatbuffers v2.0.0+incompatible // indirect
 	github.com/gorilla/handlers v1.5.1
 	github.com/gorilla/mux v1.8.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
