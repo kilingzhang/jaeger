@@ -16,15 +16,18 @@ package clickhouse
 
 import (
 	"flag"
+	"time"
 
 	"github.com/spf13/viper"
 
 	"github.com/jaegertracing/jaeger/pkg/clickhouse/config"
 )
 
-const dataSourceName = "clickhouse.data_source_name"
-const maxCommitCount = "clickhouse.max_commit_count"
-const maxCommitTime = "clickhouse.max_commit_time"
+const suffixDataSource = "clickhouse.data-source"
+const suffixMaxCommitCount = "clickhouse.max-commit-count"
+const suffixMaxCommitTime = "clickhouse.max-commit-time"
+const suffixMaxSpanAge = "clickhouse.max-span-age"
+const suffixTimeZone = "clickhouse.timezone"
 
 // Options stores the configuration entries for this storage
 type Options struct {
@@ -33,14 +36,18 @@ type Options struct {
 
 // AddFlags from this storage to the CLI
 func AddFlags(flagSet *flag.FlagSet) {
-	flagSet.String(dataSourceName, "", "data source name")
-	flagSet.Int(maxCommitCount, 10000, "max commit count")
-	flagSet.Int64(maxCommitTime, 60, "max commit time")
+	flagSet.String(suffixDataSource, "", "data source name")
+	flagSet.Int(suffixMaxCommitCount, 10000, "max commit count")
+	flagSet.Duration(suffixMaxCommitTime, time.Duration(time.Second*60), "max commit commit")
+	flagSet.Duration(suffixMaxSpanAge, time.Duration(time.Second*60*60*24*7), "max span age")
+	flagSet.String(suffixTimeZone, "Asia/Shanghai", "timezone")
 }
 
 // InitFromViper initializes the options struct with values from Viper
 func (opt *Options) InitFromViper(v *viper.Viper) {
-	opt.Configuration.DataSourceName = v.GetString(dataSourceName)
-	opt.Configuration.MaxCommitCount = v.GetInt(maxCommitCount)
-	opt.Configuration.MaxCommitTime = v.GetInt64(maxCommitTime)
+	opt.Configuration.DataSourceName = v.GetString(suffixDataSource)
+	opt.Configuration.MaxCommitCount = v.GetInt(suffixMaxCommitCount)
+	opt.Configuration.MaxCommitTime = v.GetDuration(suffixMaxCommitTime)
+	opt.Configuration.MaxSpanAge = v.GetDuration(suffixMaxSpanAge)
+	opt.Configuration.TimeZone = v.GetString(suffixTimeZone)
 }

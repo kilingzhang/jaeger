@@ -50,21 +50,21 @@ type Store struct {
 func WithConfiguration(configuration config.Configuration, logger *zap.Logger) *Store {
 	conn, err := sql.Open("clickhouse", configuration.DataSourceName)
 	if err != nil {
-		fmt.Println(err)
+		logger.Error(err.Error())
 		return nil
 	}
 	if err := conn.Ping(); err != nil {
 		if exception, ok := err.(*clickhouse.Exception); ok {
-			fmt.Println(fmt.Sprintf("[%d] %s \n%s\n", exception.Code, exception.Message, exception.StackTrace))
+			logger.Error(fmt.Sprintf("[%d] %s \n%s\n", exception.Code, exception.Message, exception.StackTrace))
 		} else {
-			fmt.Println(err)
+			logger.Error(err.Error())
 		}
 	}
-	TimeZone, _ := time.LoadLocation("Asia/Shanghai")
+	TimeZone, _ := time.LoadLocation(configuration.TimeZone)
 
 	return &Store{
 		logger:             logger,
-		rowsChan:           make(chan RowsExecuteMessage, 1000),
+		rowsChan:           make(chan RowsExecuteMessage, configuration.MaxCommitCount),
 		rowsMap:            map[string][][]interface{}{},
 		lastCommitMap:      map[string]time.Time{},
 		conn:               conn,
@@ -233,7 +233,7 @@ func (m *Store) GetTrace(ctx context.Context, traceID model.TraceID) (*model.Tra
 	now := time.Now()
 	SQL := fmt.Sprintf(
 		"select service_name,operation_name,trace_id,span_id,reference_trace_id,reference_span_id,reference_ref_type,start_time,duration,process,tags,logs from jaeger_spans_all where date between '%s' and '%s' and trace_id = '%s' order by start_time",
-		now.Add(-7*60*60*24*time.Second).In(m.TimeZone).Format(m.YYMMDDFormat),
+		now.Add(-m.config.MaxSpanAge).In(m.TimeZone).Format(m.YYMMDDFormat),
 		now.In(m.TimeZone).Format(m.YYMMDDFormat),
 		traceID.String(),
 	)
@@ -341,7 +341,7 @@ func (m *Store) GetServices(ctx context.Context) ([]string, error) {
 	now := time.Now()
 	SQL := fmt.Sprintf(
 		"select distinct service_name from jaeger_spans_all where date between '%s' and '%s'",
-		now.Add(-7*60*60*24*time.Second).In(m.TimeZone).Format(m.YYMMDDFormat),
+		now.Add(-m.config.MaxSpanAge).In(m.TimeZone).Format(m.YYMMDDFormat),
 		now.In(m.TimeZone).Format(m.YYMMDDFormat),
 	)
 	rows, err := m.conn.Query(
@@ -382,7 +382,7 @@ func (m *Store) GetOperations(
 	now := time.Now()
 	SQL := fmt.Sprintf(
 		"select distinct operation_name from jaeger_spans_all where date between '%s' and '%s' and service_name = '%s' order by start_time desc",
-		now.Add(-7*60*60*24*time.Second).In(m.TimeZone).Format(m.YYMMDDFormat),
+		now.Add(-m.config.MaxSpanAge).In(m.TimeZone).Format(m.YYMMDDFormat),
 		now.In(m.TimeZone).Format(m.YYMMDDFormat),
 		query.ServiceName,
 	)

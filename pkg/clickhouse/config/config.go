@@ -14,9 +14,13 @@
 
 package config
 
+import "time"
+
 // Configuration describes the options to customize the storage behavior
 type Configuration struct {
-	DataSourceName string `yaml:"data_source_name" mapstructure:"data_source_name"`
-	MaxCommitCount int    `yaml:"max_commit_count" mapstructure:"max_commit_count"`
-	MaxCommitTime  int64  `yaml:"max_commit_time" mapstructure:"max_commit_count"`
+	DataSourceName string        `yaml:"data_source_name" mapstructure:"data_source_name"`
+	MaxCommitCount int           `yaml:"max_commit_count" mapstructure:"max_commit_count"`
+	MaxCommitTime  time.Duration `yaml:"max_commit_time" mapstructure:"max_commit_count"`
+	MaxSpanAge     time.Duration `yaml:"max_span_age" mapstructure:"max_span_age"`
+	TimeZone       string        `yaml:"timezone" mapstructure:"timezone"`
 }

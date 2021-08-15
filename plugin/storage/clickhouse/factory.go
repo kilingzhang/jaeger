@@ -126,7 +126,7 @@ func (f *Factory) Initialize(metricsFactory metrics.Factory, logger *zap.Logger)
 
 				t := rowsMessage.Timestamp
 				for key, rows := range f.store.rowsMap {
-					if last, ok := f.store.lastCommitMap[key]; ok && len(rows) > 0 && (t.Unix()-last.Unix()) >= f.store.config.MaxCommitTime {
+					if last, ok := f.store.lastCommitMap[key]; ok && len(rows) > 0 && (t.Unix()-last.Unix()) >= f.store.config.MaxCommitTime.Milliseconds()/1e3 {
 						go f.store.MultiInsertClickHouse(key, rows)
 						f.store.logger.Info(fmt.Sprintf("%s  rows_count : %d time ticker : %s last : %s\n", key, len(rows), t.In(f.store.TimeZone).Format(f.store.YYMMDDHHIISSFormat), last.In(f.store.TimeZone).Format(f.store.YYMMDDHHIISSFormat)))
 						rows = [][]interface{}{}
