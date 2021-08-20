@@ -18,12 +18,14 @@ package clickhouse
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
 	"fmt"
 	"github.com/ClickHouse/clickhouse-go"
 	"go.uber.org/zap"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gogo/protobuf/proto"
@@ -44,6 +46,7 @@ type Store struct {
 	YYMMDDHHIISSFormat string
 	YYMMDDFormat       string
 	TimeZone           *time.Location
+	conmu              sync.RWMutex
 }
 
 // WithConfiguration creates a new in clickhouse storage based on the given configuration
@@ -81,31 +84,68 @@ func FormatInsertSQL(table string, columns []string) string {
 	return fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", table, colStr, placeholder)
 }
 
-func (m *Store) MultiInsertClickHouse(table string, rows [][]interface{}) {
+func (m *Store) reTryConnect() (err error) {
+	m.conmu.Lock()
+	defer m.conmu.Unlock()
+	_ = m.conn.Close()
+	m.conn, err = sql.Open("clickhouse", m.config.DataSourceName)
+	if err != nil {
+		m.logger.Fatal(err.Error())
+		return err
+	}
+	if err := m.conn.Ping(); err != nil {
+		if exception, ok := err.(*clickhouse.Exception); ok {
+			m.logger.Error(fmt.Sprintf("[%d] %s \n%s\n", exception.Code, exception.Message, exception.StackTrace))
+			return err
+		} else {
+			m.logger.Error(err.Error())
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *Store) batchExec(sql string, rows [][]interface{}) error {
+
 	tx, err := m.conn.Begin()
 	if err != nil {
-		m.logger.Error(err.Error())
-		return
+		return err
 	}
-	stmt, err := tx.Prepare(FormatInsertSQL(table, []string{"date", "service_name", "operation_name", "trace_id", "span_id", "reference_trace_id", "reference_span_id", "reference_ref_type", "start_time", "duration", "process", "tags", "logs"}))
+
+	stmt, err := tx.Prepare(sql)
 	if err != nil {
-		m.logger.Error(err.Error())
-		return
+		return err
 	}
+
 	for _, row := range rows {
+
 		if row == nil || len(row) <= 0 {
 			continue
 		}
 		_, err := stmt.Exec(row...)
 		if err != nil {
-			m.logger.Error(err.Error())
-			return
+			return err
 		}
 	}
+
 	err = tx.Commit()
 	if err != nil {
+		if err == driver.ErrBadConn {
+			return m.reTryConnect()
+		}
+		return err
+	}
+
+	return nil
+}
+
+func (m *Store) MultiInsertClickHouse(table string, rows [][]interface{}) {
+	err := m.batchExec(
+		FormatInsertSQL(table, []string{"date", "service_name", "operation_name", "trace_id", "span_id", "reference_trace_id", "reference_span_id", "reference_ref_type", "start_time", "duration", "process", "tags", "logs"}),
+		rows,
+	)
+	if err != nil {
 		m.logger.Error(err.Error())
-		return
 	}
 }
 
