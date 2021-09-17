@@ -499,10 +499,17 @@ func (m *Store) FormatQuerySQL(query *spanstore.TraceQueryParameters) string {
 	)
 }
 
+func (m *Store) FormatQuerySQLByTraceIds(query *spanstore.TraceQueryParameters, traceIds []string) string {
+	return fmt.Sprintf(
+		"select service_name,operation_name,trace_id,span_id,reference_trace_id,reference_span_id,reference_ref_type,start_time,duration,process,tags,logs from jaeger_spans_all where date between '%s' and '%s' and trace_id global In ('%s')  order by start_time desc",
+		query.StartTimeMin.In(m.TimeZone).Format(m.YYMMDDFormat),
+		query.StartTimeMax.In(m.TimeZone).Format(m.YYMMDDFormat),
+		strings.Join(traceIds, "','"),
+	)
+}
+
 // FindTraces returns all traces in the query parameters are satisfied by a trace's span
 func (m *Store) FindTraces(ctx context.Context, query *spanstore.TraceQueryParameters) ([]*model.Trace, error) {
-	var retMe []*model.Trace
-
 	querySQL := m.FormatQuerySQL(query)
 
 	m.logger.Info(querySQL)
@@ -525,17 +532,100 @@ func (m *Store) FindTraces(ctx context.Context, query *spanstore.TraceQueryParam
 			m.logger.Error(err.Error())
 			continue
 		}
-
 		traceIds = append(traceIds, traceId)
-		traceID, _ := model.TraceIDFromString(traceId)
-		if trace, err := m.GetTrace(ctx, traceID); err == nil {
-			retMe = append(retMe, trace)
-		}
 	}
 
 	if err := rows.Err(); err != nil {
 		m.logger.Error(err.Error())
 		return nil, spanstore.ErrTraceNotFound
+	}
+
+	return m.QueryTraces(ctx, query, traceIds)
+}
+
+func (m *Store) QueryTraces(ctx context.Context, query *spanstore.TraceQueryParameters, traceIds []string) ([]*model.Trace, error) {
+	var retMe []*model.Trace
+	querySQL := m.FormatQuerySQLByTraceIds(query, traceIds)
+
+	m.logger.Info(querySQL)
+
+	rows, err := m.conn.Query(
+		querySQL,
+	)
+
+	if err != nil {
+		m.logger.Error(err.Error())
+		return nil, spanstore.ErrTraceNotFound
+	}
+
+	defer rows.Close()
+
+	traces := map[string]*model.Trace{}
+	for rows.Next() {
+		var (
+			serviceName      string
+			OperationName    string
+			traceId          string
+			spanId           string
+			referenceTraceId string
+			referenceSpanId  string
+			referenceRefType string
+			startTime        int64
+			duration         int64
+			process          string
+			tags             string
+			logs             string
+		)
+
+		if err := rows.Scan(&serviceName, &OperationName, &traceId, &spanId, &referenceTraceId, &referenceSpanId, &referenceRefType, &startTime, &duration, &process, &tags, &logs); err != nil {
+			m.logger.Error(err.Error())
+			continue
+		}
+
+		var processTagsMap map[string]TagMap
+		_ = json.Unmarshal([]byte(process), &processTagsMap)
+
+		var tagsMap map[string]TagMap
+		_ = json.Unmarshal([]byte(tags), &tagsMap)
+
+		traceID, _ := model.TraceIDFromString(traceId)
+		SpanID, _ := model.SpanIDFromString(spanId)
+
+		var refs []model.SpanRef
+		if referenceSpanId != "" {
+			ParentTraceID, _ := model.TraceIDFromString(referenceTraceId)
+			ParentSpanID, _ := model.SpanIDFromString(referenceSpanId)
+			refs = append(refs, model.SpanRef{
+				TraceID: ParentTraceID,
+				SpanID:  ParentSpanID,
+				RefType: model.SpanRefType(model.SpanRefType_value[referenceRefType]),
+			})
+		} else {
+			refs = nil
+		}
+
+		span := &model.Span{
+			TraceID:       traceID,
+			SpanID:        SpanID,
+			OperationName: OperationName,
+			References:    refs,
+			Flags:         model.Flags(uint32(0)),
+			StartTime:     time.Unix(startTime/1e9, startTime%1e9),
+			Duration:      model.MicrosecondsAsDuration(uint64(duration / 1e3)),
+			Tags:          formatMap2KeyValues(tagsMap),
+			Logs:          nil,
+			Process: &model.Process{
+				ServiceName: serviceName,
+				Tags:        formatMap2KeyValues(processTagsMap),
+			},
+		}
+		if trace, ok := traces[traceId]; ok {
+			trace.Spans = append(trace.Spans, span)
+		} else {
+			traces[traceId] = new(model.Trace)
+			traces[traceId].Spans = append(traces[traceId].Spans, span)
+			retMe = append(retMe, traces[traceId])
+		}
 	}
 
 	return retMe, nil
