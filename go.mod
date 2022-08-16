@@ -15,7 +15,7 @@ require (
 	github.com/go-openapi/runtime v0.19.28
 	github.com/go-openapi/spec v0.20.3
 	github.com/go-openapi/strfmt v0.20.1
-	github.com/go-openapi/swag v0.19.15
+	github.com/go-openapi/swag v0.22.1
 	github.com/go-openapi/validate v0.20.2
 	github.com/gocql/gocql v0.0.0-20200228163523-cd4b606dd2fb
 	github.com/gogo/googleapis v1.4.1
@@ -42,7 +42,7 @@ require (
 	github.com/spf13/cobra v1.2.1
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.8.1
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.8.0
 	github.com/uber/jaeger-client-go v2.29.1+incompatible
 	github.com/uber/jaeger-lib v2.4.1+incompatible
 	github.com/vektra/mockery v0.0.0-20181123154057-e78b021dcbb5
