@@ -34,8 +34,8 @@ require (
 	github.com/opentracing-contrib/go-grpc v0.0.0-20191001143057-db30781987df
 	github.com/opentracing-contrib/go-stdlib v1.0.0
 	github.com/opentracing/opentracing-go v1.2.0
-	github.com/prometheus/client_golang v1.11.0
-	github.com/prometheus/common v0.30.0
+	github.com/prometheus/client_golang v1.14.0
+	github.com/prometheus/common v0.37.0
 	github.com/rs/cors v1.8.0
 	github.com/securego/gosec v0.0.0-20200203094520-d13bb6d2420c
 	github.com/soheilhy/cmux v0.1.5
@@ -53,10 +53,10 @@ require (
 	go.uber.org/automaxprocs v1.4.0
 	go.uber.org/zap v1.19.0
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616
-	golang.org/x/net v0.0.0-20210614182718-04defd469f4e
-	golang.org/x/sys v0.0.0-20210615035016-665e8c7367d1
+	golang.org/x/net v0.0.0-20220225172249-27dd8689420f
+	golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a
 	google.golang.org/grpc v1.40.0
-	google.golang.org/protobuf v1.27.1
+	google.golang.org/protobuf v1.28.1
 	gopkg.in/yaml.v2 v2.4.0
 	honnef.co/go/tools v0.2.0
 )
